@@ -1,0 +1,61 @@
+[project]
+name = "clipforge"
+version = "0.1.0"
+description = "Self-hosted clipping platform: import long-form video from a link, find viral moments, render vertical clips with animated captions."
+readme = "../README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2.0.36",
+    "psycopg[binary,pool]>=3.2",
+    "pydantic>=2.8",
+    "pydantic-settings>=2.4",
+    "yt-dlp>=2025.1.1",
+    "numpy>=2.0",
+    "opencv-python-headless>=4.10",
+    "prometheus-client>=0.20",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+# Local speech-to-text. Installed in the worker image; the API does not need it.
+whisper = ["faster-whisper>=1.1"]
+# Optional AI re-ranking/titling of detected moments.
+llm = ["anthropic>=0.40"]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+clipforge = "clipforge.__main__:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["clipforge*"]
+
+[tool.setuptools.package-data]
+clipforge = ["assets/fonts/*", "assets/models/*", "db/migrations/*.sql"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = [
+    "S101",   # asserts are fine in tests
+    "S603",   # subprocess calls use fixed argv lists, never a shell
+    "S607",   # ffmpeg/ffprobe resolved from PATH by design
+    "RUF012", # mutable class attrs on pydantic models are fine
+    "B008",   # FastAPI Depends() in defaults is idiomatic
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "B"]

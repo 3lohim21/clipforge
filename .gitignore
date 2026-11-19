@@ -1,0 +1,23 @@
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+
+# node
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# runtime data (media, models, caches) — never commit
+data/
+backend/data/
+*.log
+
+# local env
+.env
+.env.local
+deploy/.env
