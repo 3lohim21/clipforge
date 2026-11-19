@@ -35,7 +35,9 @@ def test_dedupe_key_allows_one_live_job(clean_db: None) -> None:
     job = q.claim(get_engine(), "w", ["analyze"])
     q.complete(get_engine(), job, "w")  # type: ignore[arg-type]
     with session_scope() as s:
-        assert q.enqueue(s, "video.analyze", {}, dedupe_key="analyze:1") is not None  # finished: allowed again
+        assert (
+            q.enqueue(s, "video.analyze", {}, dedupe_key="analyze:1") is not None
+        )  # finished: allowed again
 
 
 def test_skip_locked_hands_each_job_to_exactly_one_worker(clean_db: None) -> None:
@@ -84,7 +86,10 @@ def test_stale_lease_is_reaped_and_old_owner_cannot_complete(clean_db: None) -> 
         job_id = q.enqueue(s, "video.ingest", {}, max_attempts=3)
     job = q.claim(get_engine(), "dead-worker", ["ingest"])
     with get_engine().begin() as conn:
-        conn.execute(text("UPDATE jobs SET heartbeat_at = now() - interval '10 minutes' WHERE id = :id"), {"id": job_id})
+        conn.execute(
+            text("UPDATE jobs SET heartbeat_at = now() - interval '10 minutes' WHERE id = :id"),
+            {"id": job_id},
+        )
     assert q.reap_stale(get_engine(), 60) == []  # re-queued, not failed
     new = q.claim(get_engine(), "new-worker", ["ingest"])
     assert new and new.id == job_id
@@ -128,7 +133,9 @@ def test_listen_notify_wakes_a_sleeping_worker_quickly(clean_db: None) -> None:
     done = threading.Event()
     registry = {"video.ingest": Handler(lambda ctx: done.set())}
     worker = Worker(registry, queues=["ingest"])
-    worker.settings = worker.settings.model_copy(update={"job_poll_interval_s": 30.0})  # polling alone would be slow
+    worker.settings = worker.settings.model_copy(
+        update={"job_poll_interval_s": 30.0}
+    )  # polling alone would be slow
     thread = threading.Thread(target=worker.run, kwargs={"install_signals": False}, daemon=True)
     thread.start()
     threading.Event().wait(1.0)  # let it subscribe and go idle

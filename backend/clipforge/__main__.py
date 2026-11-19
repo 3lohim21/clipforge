@@ -18,6 +18,10 @@ from clipforge.config import get_settings
 def _serve(args: argparse.Namespace) -> None:
     import uvicorn
 
+    from clipforge.logging import configure_logging
+
+    settings = get_settings()
+    configure_logging(settings.log_level, settings.log_json)
     uvicorn.run(
         "clipforge.api.app:create_app",
         factory=True,
@@ -28,6 +32,7 @@ def _serve(args: argparse.Namespace) -> None:
         forwarded_allow_ips="*",
         access_log=False,
         timeout_graceful_shutdown=20,
+        log_config=None,  # keep our handlers: uvicorn's lines become JSON in production too
     )
 
 

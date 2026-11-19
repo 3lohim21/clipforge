@@ -87,7 +87,9 @@ def test_ssrf_guard_allows_public_literal_and_dev_override() -> None:
 
 
 def test_project_settings_sanitises_bad_values() -> None:
-    s = ProjectSettings(caption_preset="nope", layout="nope", highlight_color="red", min_clip_s=30, max_clip_s=20)
+    s = ProjectSettings(
+        caption_preset="nope", layout="nope", highlight_color="red", min_clip_s=30, max_clip_s=20
+    )
     assert s.caption_preset == "bold" and s.layout == "vertical_fill" and s.highlight_color is None
     assert s.max_clip_s > s.min_clip_s and s.min_clip_s <= s.target_clip_s <= s.max_clip_s
     assert load_settings({"min_clip_s": "not a number"}) == ProjectSettings()

@@ -9,7 +9,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from clipforge.core.urls import assert_public_host
+from clipforge.core.urls import assert_public_host, detect_platform
 from clipforge.db import session_scope
 from clipforge.db.models import Project, Video
 from clipforge.jobs.queue import PermanentJobError, enqueue
@@ -162,7 +162,9 @@ def run(ctx: JobContext) -> None:
         updates.update(
             title=(info.get("title") or "Untitled")[:300],
             uploader=info.get("uploader") or info.get("channel"),
-            platform=(info.get("extractor_key") or "web").lower(),
+            # yt-dlp's "Generic" extractor means a plain web link: keep our own label.
+            platform=(info.get("extractor_key") or "").lower().replace("generic", "")
+            or detect_platform(source_url),
             external_id=info.get("id"),
         )
     else:

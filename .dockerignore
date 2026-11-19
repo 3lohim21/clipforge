@@ -1,0 +1,12 @@
+**/.venv
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/*.egg-info
+frontend/dist
+**/data
+**/.env
+**/.env.*
+!deploy/.env.example
+.git

@@ -18,9 +18,30 @@ from tests.conftest import FIXTURES, fake_words
 
 def _write_video(path: Path, frames, fps: int = 25, size=(1280, 720)) -> None:  # type: ignore[no-untyped-def]
     proc = subprocess.Popen(
-        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24",
-         "-s", f"{size[0]}x{size[1]}", "-r", str(fps), "-i", "-", "-c:v", "libx264", "-preset", "ultrafast",
-         "-pix_fmt", "yuv420p", str(path)],
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "bgr24",
+            "-s",
+            f"{size[0]}x{size[1]}",
+            "-r",
+            str(fps),
+            "-i",
+            "-",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-pix_fmt",
+            "yuv420p",
+            str(path),
+        ],
         stdin=subprocess.PIPE,
     )
     for frame in frames:
@@ -41,7 +62,9 @@ def _scene(face: np.ndarray, centers: list[tuple[float, bool]], rng: np.random.G
     for cx, talking in centers:
         f = face.copy()
         if talking:  # irregular mouth motion, like speech
-            f[88:110, 128:166] = np.clip(f[88:110, 128:166].astype(int) + int(rng.integers(-80, 80)), 0, 255).astype(np.uint8)
+            f[88:110, 128:166] = np.clip(
+                f[88:110, 128:166].astype(int) + int(rng.integers(-80, 80)), 0, 255
+            ).astype(np.uint8)
         x = int(cx * 1280 - 170)
         frame[160:500, x : x + 340] = f
     return frame
@@ -87,11 +110,28 @@ def test_active_speaker_is_chosen_in_a_two_shot(tmp_path: Path, face: np.ndarray
 @pytest.mark.parametrize("layout", ["vertical_fill", "vertical_fit", "square_fill", "landscape"])
 def test_render_every_layout(tmp_path: Path, sample_video: Path, layout: str) -> None:
     meta = probe(sample_video)
-    spec = {"start_ms": 2_000, "end_ms": 7_000, "layout": layout, "captions": True, "caption_preset": "beast",
-            "title_overlay": True, "title": "Test title", "watermark": "@agency", "reframe": "auto"}
+    spec = {
+        "start_ms": 2_000,
+        "end_ms": 7_000,
+        "layout": layout,
+        "captions": True,
+        "caption_preset": "beast",
+        "title_overlay": True,
+        "title": "Test title",
+        "watermark": "@agency",
+        "reframe": "auto",
+    }
     out, thumb = tmp_path / "out.mp4", tmp_path / "out.jpg"
-    result = render_clip(spec, src=sample_video, probe=meta, words=fake_words(40), out_path=out,
-                         thumb_path=thumb, workdir=tmp_path / "work", settings=get_settings())
+    result = render_clip(
+        spec,
+        src=sample_video,
+        probe=meta,
+        words=fake_words(40),
+        out_path=out,
+        thumb_path=thumb,
+        workdir=tmp_path / "work",
+        settings=get_settings(),
+    )
     rendered = probe(out)
     assert (rendered.width, rendered.height) == (result.width, result.height)
     assert rendered.vcodec == "h264" and rendered.acodec == "aac" and rendered.pix_fmt == "yuv420p"

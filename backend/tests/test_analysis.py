@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import json
 import time
 from types import SimpleNamespace
@@ -31,24 +32,39 @@ def _sentence_words(sentences: list[str], start_ms: int = 0, gap_ms: int = 700) 
 
 # --- transcript import --------------------------------------------------------------------------
 
+
 def test_parse_json3_word_timed_auto_captions() -> None:
     data = {
         "events": [
-            {"tStartMs": 1000, "dDurationMs": 3000, "segs": [
-                {"utf8": "hello"}, {"utf8": " world", "tOffsetMs": 400}, {"utf8": " again", "tOffsetMs": 900}]},
+            {
+                "tStartMs": 1000,
+                "dDurationMs": 3000,
+                "segs": [
+                    {"utf8": "hello"},
+                    {"utf8": " world", "tOffsetMs": 400},
+                    {"utf8": " again", "tOffsetMs": 900},
+                ],
+            },
             {"tStartMs": 3000, "aAppend": 1, "segs": [{"utf8": "\n"}]},
             {"tStartMs": 4000, "dDurationMs": 1000, "segs": [{"utf8": "[Music]"}]},
         ]
     }
     words, timed = parse_json3(data)
     assert timed
-    assert [(w.start, w.text) for w in words] == [(1000, "hello"), (1400, "world"), (1900, "again"), (4000, "[Music]")]
+    assert [(w.start, w.text) for w in words] == [
+        (1000, "hello"),
+        (1400, "world"),
+        (1900, "again"),
+        (4000, "[Music]"),
+    ]
     assert all(w.end > w.start for w in words)
     assert words[0].end <= words[1].start  # ends repaired to next start
 
 
 def test_parse_json3_line_level_spreads_words() -> None:
-    words, timed = parse_json3({"events": [{"tStartMs": 0, "dDurationMs": 2000, "segs": [{"utf8": "one two three"}]}]})
+    words, timed = parse_json3(
+        {"events": [{"tStartMs": 0, "dDurationMs": 2000, "segs": [{"utf8": "one two three"}]}]}
+    )
     assert not timed
     assert [w.text for w in words] == ["one", "two", "three"]
     assert words[0].start == 0 and words[-1].end <= 2000
@@ -76,6 +92,7 @@ def test_words_in_range_binary_search() -> None:
 
 # --- moment detection -------------------------------------------------------------------------------
 
+
 def test_segmenter_splits_punctuated_and_raw_asr() -> None:
     punct = split_sentences(_sentence_words(["This is one.", "Is this two?", "Three!"]))
     assert [s.text for s in punct] == ["This is one.", "Is this two?", "Three!"]
@@ -94,15 +111,21 @@ def test_find_moments_prefers_hooks_and_never_overlaps() -> None:
     sentences = [filler] * 12 + hook.split(". ") + [filler] * 12
     words = _sentence_words([s if s.endswith((".", "?", "!")) else s + "." for s in sentences])
     duration = words[-1].end + 1000
-    moments = find_moments(words, duration_ms=duration, params=MomentParams(min_len_ms=10_000, max_len_ms=40_000, target_len_ms=20_000, max_clips=5))
+    moments = find_moments(
+        words,
+        duration_ms=duration,
+        params=MomentParams(min_len_ms=10_000, max_len_ms=40_000, target_len_ms=20_000, max_clips=5),
+    )
     assert moments, "should find something"
     best = moments[0]
     hook_start = next(w.start for w in words if w.text == "What")
-    assert best.start_ms <= hook_start + 1000 and best.end_ms > hook_start, "the hook segment should rank first"
+    assert best.start_ms <= hook_start + 1000 and best.end_ms > hook_start, (
+        "the hook segment should rank first"
+    )
     assert best.score >= max(m.score for m in moments)
     for i, a in enumerate(moments):
         assert 10_000 - 1000 <= a.end_ms - a.start_ms <= 40_000 + 1000
-        for b in moments[i + 1:]:
+        for b in moments[i + 1 :]:
             inter = min(a.end_ms, b.end_ms) - max(a.start_ms, b.start_ms)
             assert inter <= 0.15 * min(a.end_ms - a.start_ms, b.end_ms - b.start_ms) + 1
     assert best.title and not best.title.lower().startswith(("and ", "um", "so "))
@@ -120,7 +143,9 @@ def test_heatmap_pulls_selection_toward_most_replayed() -> None:
 def test_audio_only_fallback_uses_loudness() -> None:
     energy = np.full(3000, -40.0, dtype=np.float32)  # 300 s at 100 ms frames
     energy[1500:1800] = -8.0  # loud section 150-180 s
-    moments = find_moments([], duration_ms=300_000, energy_db=energy, params=MomentParams(target_len_ms=30_000, max_clips=2))
+    moments = find_moments(
+        [], duration_ms=300_000, energy_db=energy, params=MomentParams(target_len_ms=30_000, max_clips=2)
+    )
     assert moments[0].start_ms <= 150_000 and moments[0].end_ms >= 175_000
     assert moments[0].title.startswith("Highlight at")
 
@@ -137,6 +162,7 @@ def test_scoring_three_hour_podcast_is_fast() -> None:
 
 # --- captions -----------------------------------------------------------------------------------------
 
+
 def test_chunks_respect_limits_breaks_and_drop_fillers() -> None:
     words = _sentence_words(["Here's why most people never get rich.", "um They spend it all."], gap_ms=200)
     chunks = build_chunks(words, get_preset("bold"))
@@ -145,7 +171,7 @@ def test_chunks_respect_limits_breaks_and_drop_fillers() -> None:
     assert any(t.endswith("RICH") for t in texts)  # sentence end closes a chunk
     assert all("UM" not in t.split() for t in texts)
     assert all(len(c.words) <= 3 for c in chunks)
-    for a, b in zip(chunks, chunks[1:], strict=False):
+    for a, b in itertools.pairwise(chunks):
         assert a.end <= b.start  # never two chunks on screen at once
 
 
@@ -153,22 +179,33 @@ def test_clip_chunks_retime_relative_to_clip() -> None:
     chunks = build_chunks(fake_words(60), get_preset("clean"))
     clipped = clip_chunks(chunks, 10_000, 20_000)
     assert clipped[0].start >= 0 and clipped[-1].end <= 10_000
-    assert all(0 <= w.start for c in clipped for w in c.words)
+    assert all(w.start >= 0 for c in clipped for w in c.words)
 
 
 def test_ass_output_escapes_overrides_and_formats_times() -> None:
-    assert ass_escape("{\\b1}evil") == "(⧵b1)evil"
+    assert ass_escape("{\\b1}evil") == "(\u29f5b1)evil"  # braces neutralised, look-alike backslash
     words = [Word(0, 400, "{\\pos(1,1)}hack"), Word(400, 900, "safe")]
     for preset in CAPTION_PRESETS.values():
-        ass = build_ass(build_chunks(words, preset), preset, width=1080, height=1920, title="My title", watermark="@me", duration_ms=5000)
+        ass = build_ass(
+            build_chunks(words, preset),
+            preset,
+            width=1080,
+            height=1920,
+            title="My title",
+            watermark="@me",
+            duration_ms=5000,
+        )
         assert "PlayResX: 1080" in ass and "PlayResY: 1920" in ass
         assert "\\pos(1,1)" not in ass.split("[Events]")[1].replace("\\pos(540", "")
         assert "Dialogue:" in ass and "My title" in ass and "@me" in ass
-    karaoke = build_ass(build_chunks(words, get_preset("karaoke")), get_preset("karaoke"), width=1080, height=1920)
+    karaoke = build_ass(
+        build_chunks(words, get_preset("karaoke")), get_preset("karaoke"), width=1080, height=1920
+    )
     assert "\\kf" in karaoke
 
 
 # --- LLM re-ranking ---------------------------------------------------------------------------------------
+
 
 class _FakeMessages:
     def __init__(self, response: object) -> None:
@@ -183,7 +220,8 @@ class _FakeMessages:
 def _fake_client(payload: object, stop_reason: str = "end_turn") -> SimpleNamespace:
     text = payload if isinstance(payload, str) else json.dumps(payload)
     response = SimpleNamespace(
-        stop_reason=stop_reason, model="claude-test",
+        stop_reason=stop_reason,
+        model="claude-test",
         content=[SimpleNamespace(type="text", text=text)],
         usage=SimpleNamespace(input_tokens=100, output_tokens=50),
     )
@@ -193,12 +231,39 @@ def _fake_client(payload: object, stop_reason: str = "end_turn") -> SimpleNamesp
 def test_llm_rerank_merges_scores_titles_and_hashtags() -> None:
     moments = find_moments(fake_words(400), duration_ms=400_000, params=MomentParams(max_clips=6))
     settings = Settings(anthropic_api_key="test", llm_model="claude-opus-5-5")
-    client = _fake_client({"clips": [
-        {"id": 2, "score": 97, "standalone": True, "title": "The million dollar mistake", "hook": "He lost it ALL",
-         "hashtags": ["#money", "investing"], "reason": "Huge stakes"},
-        {"id": 0, "score": 20, "standalone": False, "title": "meh", "hook": "", "hashtags": [], "reason": ""},
-        {"id": 99, "score": 100, "standalone": True, "title": "bogus id", "hook": "", "hashtags": [], "reason": ""},
-    ]})
+    client = _fake_client(
+        {
+            "clips": [
+                {
+                    "id": 2,
+                    "score": 97,
+                    "standalone": True,
+                    "title": "The million dollar mistake",
+                    "hook": "He lost it ALL",
+                    "hashtags": ["#money", "investing"],
+                    "reason": "Huge stakes",
+                },
+                {
+                    "id": 0,
+                    "score": 20,
+                    "standalone": False,
+                    "title": "meh",
+                    "hook": "",
+                    "hashtags": [],
+                    "reason": "",
+                },
+                {
+                    "id": 99,
+                    "score": 100,
+                    "standalone": True,
+                    "title": "bogus id",
+                    "hook": "",
+                    "hashtags": [],
+                    "reason": "",
+                },
+            ]
+        }
+    )
     ranked, info = rerank(moments, video={"title": "Pod"}, settings=settings, keep=2, client=client)
     assert info["used"] and len(ranked) == 2
     assert ranked[0].title == "The million dollar mistake" and ranked[0].hashtags == ["money", "investing"]

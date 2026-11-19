@@ -1,0 +1,88 @@
+# ClipForge production stack for a single server.
+#
+#   cp .env.example .env    # set DOMAIN, POSTGRES_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD
+#   docker compose up -d --build
+#   docker compose up -d --scale worker=3       # more parallel imports/renders
+#
+# Topology: caddy (TLS, :80/:443) -> api (FastAPI + SPA) -> postgres (data + job queue)
+#           worker x N (yt-dlp, ffmpeg, Whisper, OpenCV) <-> postgres; media on a shared volume.
+
+name: clipforge
+
+x-app: &app
+  build:
+    context: ..
+    dockerfile: Dockerfile
+    target: runtime
+  image: ${CLIPFORGE_IMAGE:-clipforge:latest}
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql://clipforge:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/clipforge
+    PUBLIC_URL: https://${DOMAIN:?set DOMAIN in .env}
+    COOKIE_SECURE: "true"
+    MEDIA_ACCEL_REDIRECT: "true"
+  volumes:
+    - media:/data
+  depends_on:
+    postgres:
+      condition: service_healthy
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" }
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: clipforge
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: clipforge
+    command: ["postgres", "-c", "max_connections=200", "-c", "shared_buffers=256MB"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clipforge -d clipforge"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    shm_size: 256mb
+    restart: unless-stopped
+
+  api:
+    <<: *app
+    command: ["serve", "--workers", "${API_WORKERS:-2}"]
+    expose: ["8000"]
+
+  worker:
+    <<: *app
+    command: ["worker", "--metrics-port", "9100"]
+    # Long renders get time to finish; anything unfinished is handed back to the queue.
+    stop_grace_period: 60s
+    healthcheck:
+      disable: true # the image healthcheck targets the API; workers are watched via queue metrics
+
+  caddy:
+    image: caddy:2.10-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+      API_UPSTREAM: api:8000
+      MEDIA_ROOT: /srv/clipforge/media
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - media:/srv/clipforge:ro # read-only: Caddy only streams finished files
+      - caddy_data:/data # TLS certificates
+      - caddy_config:/config
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  media:
+  caddy_data:
+  caddy_config:

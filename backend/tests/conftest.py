@@ -61,9 +61,24 @@ def sample_video(media_dir: Path) -> Path:
     """40 s 1280x720 H.264/AAC 'talk': test pattern + tone (faststart deliberately off)."""
     out = media_dir / "talk.mp4"
     ffmpeg(
-        "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=25:duration=40",
-        "-f", "lavfi", "-i", "sine=frequency=220:duration=40",
-        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(out),
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=1280x720:rate=25:duration=40",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=220:duration=40",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-shortest",
+        str(out),
     )
     return out
 
@@ -73,10 +88,26 @@ def webm_video(media_dir: Path) -> Path:
     """VP9/Opus WebM: not browser-safe for every target, exercises the proxy path."""
     out = media_dir / "clip.webm"
     ffmpeg(
-        "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=25:duration=6",
-        "-f", "lavfi", "-i", "sine=frequency=330:duration=6",
-        "-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "8", "-b:v", "300k",
-        "-c:a", "libopus", "-shortest", str(out),
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=640x360:rate=25:duration=6",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=330:duration=6",
+        "-c:v",
+        "libvpx-vp9",
+        "-deadline",
+        "realtime",
+        "-cpu-used",
+        "8",
+        "-b:v",
+        "300k",
+        "-c:a",
+        "libopus",
+        "-shortest",
+        str(out),
     )
     return out
 

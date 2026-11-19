@@ -1,0 +1,28 @@
+# GPU add-on: transcription (Whisper large-v3-turbo) and renders (NVENC) move to an NVIDIA GPU;
+# the CPU worker keeps downloads, analysis and maintenance.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+#
+# Host requirements: NVIDIA driver + NVIDIA Container Toolkit.
+
+services:
+  worker:
+    command: ["worker", "--queues", "ingest,analyze,maintenance", "--metrics-port", "9100"]
+
+  worker-gpu:
+    extends:
+      file: docker-compose.yml
+      service: worker
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: gpu
+    image: ${CLIPFORGE_GPU_IMAGE:-clipforge-gpu:latest}
+    command: ["worker", "--queues", "transcribe,render", "--concurrency", "2", "--metrics-port", "9101"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu, compute, video, utility]

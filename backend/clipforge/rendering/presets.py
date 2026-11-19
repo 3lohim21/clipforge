@@ -7,8 +7,12 @@ per caption), so what the editor shows is what gets exported.
 
 from __future__ import annotations
 
+import struct
 from dataclasses import asdict, dataclass
+from functools import cache
 from typing import Any, Literal
+
+from clipforge.config import FONTS_DIR
 
 CaptionMode = Literal["highlight", "karaoke", "plain"]
 
@@ -19,7 +23,7 @@ class CaptionPreset:
     name: str
     font_family: str  # family name as libass/fontconfig sees it
     font_file: str  # file in assets/fonts (also served to the browser)
-    font_size: int  # px at a 1080-px-wide frame
+    font_size: int  # libass size (ascent+descent cell height) in px at a 1080-px-wide frame
     uppercase: bool
     strip_punctuation: bool
     primary: str  # text colour
@@ -54,13 +58,13 @@ CAPTION_PRESETS: dict[str, CaptionPreset] = {
             name="Bold Pop",
             font_family="Poppins Black",
             font_file="Poppins-Black.ttf",
-            font_size=78,
+            font_size=112,
             uppercase=True,
             strip_punctuation=True,
             primary="#FFFFFF",
             highlight="#FFE600",
             outline="#000000",
-            outline_width=6,
+            outline_width=7,
             shadow=0,
             max_words=3,
             max_chars=18,
@@ -73,13 +77,13 @@ CAPTION_PRESETS: dict[str, CaptionPreset] = {
             name="Beast",
             font_family="Bangers",
             font_file="Bangers-Regular.ttf",
-            font_size=104,
+            font_size=160,
             uppercase=True,
             strip_punctuation=True,
             primary="#FFFFFF",
             highlight="#22E36B",
             outline="#000000",
-            outline_width=7,
+            outline_width=8,
             shadow=4,
             max_words=2,
             max_chars=14,
@@ -93,13 +97,13 @@ CAPTION_PRESETS: dict[str, CaptionPreset] = {
             name="Impact",
             font_family="Anton",
             font_file="Anton-Regular.ttf",
-            font_size=96,
+            font_size=165,
             uppercase=True,
             strip_punctuation=True,
             primary="#FFFFFF",
             highlight="#FF3B30",
             outline="#000000",
-            outline_width=5,
+            outline_width=6,
             shadow=0,
             max_words=3,
             max_chars=16,
@@ -112,13 +116,13 @@ CAPTION_PRESETS: dict[str, CaptionPreset] = {
             name="Karaoke",
             font_family="Bebas Neue",
             font_file="BebasNeue-Regular.ttf",
-            font_size=108,
+            font_size=125,
             uppercase=True,
             strip_punctuation=True,
             primary="#FFFFFF",
             highlight="#00D2FF",
             outline="#000000",
-            outline_width=5,
+            outline_width=6,
             shadow=0,
             max_words=4,
             max_chars=22,
@@ -132,13 +136,13 @@ CAPTION_PRESETS: dict[str, CaptionPreset] = {
             name="Clean",
             font_family="Poppins ExtraBold",
             font_file="Poppins-ExtraBold.ttf",
-            font_size=62,
+            font_size=90,
             uppercase=False,
             strip_punctuation=False,
             primary="#FFFFFF",
             highlight="#4DA3FF",
             outline="#000000",
-            outline_width=3,
+            outline_width=4,
             shadow=2,
             max_words=5,
             max_chars=28,
@@ -151,7 +155,7 @@ CAPTION_PRESETS: dict[str, CaptionPreset] = {
             name="Subtitle box",
             font_family="Poppins ExtraBold",
             font_file="Poppins-ExtraBold.ttf",
-            font_size=50,
+            font_size=70,
             uppercase=False,
             strip_punctuation=False,
             primary="#FFFFFF",
@@ -202,8 +206,40 @@ def get_layout(layout_id: str | None) -> Layout:
     return LAYOUTS.get(layout_id or DEFAULT_LAYOUT, LAYOUTS[DEFAULT_LAYOUT])
 
 
+# On-screen title hook and watermark (shared by the ASS writer and the editor preview).
+TITLE_OVERLAY = {"font_family": "Poppins Black", "font_file": "Poppins-Black.ttf", "size": 84, "outline": 6}
+WATERMARK_OVERLAY = {"font_family": "Poppins ExtraBold", "font_file": "Poppins-ExtraBold.ttf", "size": 46}
+
+
+@cache
+def em_per_size(font_file: str) -> float:
+    """libass sizes text so the font's Windows ascent + descent equals the requested size
+    (GDI-compatible); browsers size the em box. This per-font ratio (read from the OS/2 and
+    head tables) lets the editor convert one into the other, so previews match exports."""
+    data = (FONTS_DIR / font_file).read_bytes()
+    (num_tables,) = struct.unpack(">H", data[4:6])
+    tables = {}
+    for i in range(num_tables):
+        tag, _, offset, _ = struct.unpack(">4sIII", data[12 + 16 * i : 28 + 16 * i])
+        tables[tag] = offset
+    (units_per_em,) = struct.unpack(">H", data[tables[b"head"] + 18 : tables[b"head"] + 20])
+    if b"OS/2" in tables:
+        os2 = tables[b"OS/2"]
+        win_ascent, win_descent = struct.unpack(">HH", data[os2 + 74 : os2 + 78])
+        if win_ascent + win_descent:
+            return units_per_em / (win_ascent + win_descent)
+    ascent, descent = struct.unpack(">hh", data[tables[b"hhea"] + 4 : tables[b"hhea"] + 8])
+    return units_per_em / (ascent - descent)
+
+
 def catalog() -> dict[str, Any]:
+    fonts = {p.font_file for p in CAPTION_PRESETS.values()} | {
+        TITLE_OVERLAY["font_file"],
+        WATERMARK_OVERLAY["font_file"],
+    }
     return {
+        "font_em_per_size": {f: round(em_per_size(f), 4) for f in sorted(fonts)},
+        "overlays": {"title": TITLE_OVERLAY, "watermark": WATERMARK_OVERLAY},
         "caption_presets": [asdict(p) for p in CAPTION_PRESETS.values()],
         "layouts": [asdict(lay) for lay in LAYOUTS.values()],
         "defaults": {"caption_preset": DEFAULT_PRESET, "layout": DEFAULT_LAYOUT, "caption_position": 0.72},

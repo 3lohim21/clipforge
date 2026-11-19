@@ -14,7 +14,9 @@ def _project(client, **settings) -> str:  # type: ignore[no-untyped-def]
 
 
 def test_link_to_rendered_clip(auth_client, media_server, fake_whisper, run_jobs, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
-    pid = _project(auth_client, min_clip_s=8, max_clip_s=20, target_clip_s=12, cpm_usd=2.0, watermark="@client")
+    pid = _project(
+        auth_client, min_clip_s=8, max_clip_s=20, target_clip_s=12, cpm_usd=2.0, watermark="@client"
+    )
     r = auth_client.post(f"/api/projects/{pid}/videos", json={"urls": [f"{media_server}/talk.mp4"]})
     assert r.status_code == 201, r.text
     vid = r.json()[0]["id"]
@@ -45,10 +47,19 @@ def test_link_to_rendered_clip(auth_client, media_server, fake_whisper, run_jobs
     assert 7_000 <= best["end_ms"] - best["start_ms"] <= 21_000 and best["title"]
 
     # Trim, restyle, render.
-    r = auth_client.patch(f"/api/clips/{best['id']}", json={
-        "start_ms": best["start_ms"] + 500, "title": "Edited title",
-        "edit": {"layout": "vertical_fill", "caption_preset": "karaoke", "title_overlay": True, "reframe": "center"},
-    })
+    r = auth_client.patch(
+        f"/api/clips/{best['id']}",
+        json={
+            "start_ms": best["start_ms"] + 500,
+            "title": "Edited title",
+            "edit": {
+                "layout": "vertical_fill",
+                "caption_preset": "karaoke",
+                "title_overlay": True,
+                "reframe": "center",
+            },
+        },
+    )
     assert r.status_code == 200 and r.json()["edit"]["caption_preset"] == "karaoke"
     bad = auth_client.patch(f"/api/clips/{best['id']}", json={"end_ms": best["start_ms"]})
     assert bad.status_code == 422
@@ -76,14 +87,23 @@ def test_link_to_rendered_clip(auth_client, media_server, fake_whisper, run_jobs
     assert library[0]["latest_render"]["status"] == "done" and library[0]["video_title"]
 
     # Track where it was posted; stats refresh runs as a job (the local URL has no view count).
-    post = auth_client.post(f"/api/clips/{best['id']}/posts", json={"url": "https://www.tiktok.com/@client/video/123"})
+    post = auth_client.post(
+        f"/api/clips/{best['id']}/posts", json={"url": "https://www.tiktok.com/@client/video/123"}
+    )
     assert post.status_code == 201 and post.json()["platform"] == "tiktok"
-    assert auth_client.post(f"/api/clips/{best['id']}/posts", json={"url": "https://www.tiktok.com/@client/video/123"}).status_code == 409
+    assert (
+        auth_client.post(
+            f"/api/clips/{best['id']}/posts", json={"url": "https://www.tiktok.com/@client/video/123"}
+        ).status_code
+        == 409
+    )
     summary = auth_client.get(f"/api/projects/{pid}/posts").json()
     assert summary["total_views"] == 0 and summary["est_revenue_usd"] == 0.0
 
     stats = auth_client.get(f"/api/projects/{pid}").json()["stats"]
-    assert stats["videos"] == 1 and stats["renders"] == 1 and stats["clips_saved"] >= 1 and stats["posts"] == 1
+    assert (
+        stats["videos"] == 1 and stats["renders"] == 1 and stats["clips_saved"] >= 1 and stats["posts"] == 1
+    )
 
     # Deleting the video removes rows now and media files via a delayed cleanup job.
     assert auth_client.delete(f"/api/videos/{vid}").status_code == 204
@@ -93,13 +113,22 @@ def test_link_to_rendered_clip(auth_client, media_server, fake_whisper, run_jobs
 
 def test_manual_clip_and_face_tracked_render(auth_client, media_server, fake_whisper, run_jobs) -> None:  # type: ignore[no-untyped-def]
     pid = _project(auth_client)
-    vid = auth_client.post(f"/api/projects/{pid}/videos", json={"urls": [f"{media_server}/talk.mp4"]}).json()[0]["id"]
+    vid = auth_client.post(f"/api/projects/{pid}/videos", json={"urls": [f"{media_server}/talk.mp4"]}).json()[
+        0
+    ]["id"]
     run_jobs()
-    r = auth_client.post(f"/api/videos/{vid}/clips", json={"start_ms": 1000, "end_ms": 6000, "title": "Manual"})
+    r = auth_client.post(
+        f"/api/videos/{vid}/clips", json={"start_ms": 1000, "end_ms": 6000, "title": "Manual"}
+    )
     assert r.status_code == 201 and r.json()["origin"] == "manual" and r.json()["status"] == "saved"
     clip = r.json()
-    assert auth_client.post(f"/api/videos/{vid}/clips", json={"start_ms": 1000, "end_ms": 1200}).status_code == 422
-    render = auth_client.post(f"/api/clips/{clip['id']}/render", json={"edit": {"layout": "square_fill"}}).json()
+    assert (
+        auth_client.post(f"/api/videos/{vid}/clips", json={"start_ms": 1000, "end_ms": 1200}).status_code
+        == 422
+    )
+    render = auth_client.post(
+        f"/api/clips/{clip['id']}/render", json={"edit": {"layout": "square_fill"}}
+    ).json()
     run_jobs()
     done = auth_client.get(f"/api/renders/{render['id']}").json()
     assert done["status"] == "done" and (done["width"], done["height"]) == (1080, 1080)
@@ -109,7 +138,9 @@ def test_manual_clip_and_face_tracked_render(auth_client, media_server, fake_whi
 
 def test_upload_webm_gets_browser_proxy(auth_client, webm_video, fake_whisper, run_jobs) -> None:  # type: ignore[no-untyped-def]
     pid = _project(auth_client)
-    r = auth_client.put(f"/api/projects/{pid}/videos/upload?filename=My_Stream.webm", content=webm_video.read_bytes())
+    r = auth_client.put(
+        f"/api/projects/{pid}/videos/upload?filename=My_Stream.webm", content=webm_video.read_bytes()
+    )
     assert r.status_code == 201, r.text
     vid = r.json()["id"]
     assert r.json()["title"] == "My Stream" and r.json()["source_type"] == "upload"
@@ -122,7 +153,9 @@ def test_upload_webm_gets_browser_proxy(auth_client, webm_video, fake_whisper, r
 
 def test_bad_link_fails_cleanly_and_retry_resumes(auth_client, media_server, fake_whisper, run_jobs) -> None:  # type: ignore[no-untyped-def]
     pid = _project(auth_client)
-    vid = auth_client.post(f"/api/projects/{pid}/videos", json={"urls": [f"{media_server}/missing.mp4"]}).json()[0]["id"]
+    vid = auth_client.post(
+        f"/api/projects/{pid}/videos", json={"urls": [f"{media_server}/missing.mp4"]}
+    ).json()[0]["id"]
     run_jobs()
     video = auth_client.get(f"/api/videos/{vid}").json()
     assert video["status"] == "failed" and "404" in video["error"]
@@ -131,7 +164,9 @@ def test_bad_link_fails_cleanly_and_retry_resumes(auth_client, media_server, fak
 
 def test_reanalyze_keeps_saved_clips(auth_client, media_server, fake_whisper, run_jobs) -> None:  # type: ignore[no-untyped-def]
     pid = _project(auth_client, min_clip_s=8, max_clip_s=20, target_clip_s=12)
-    vid = auth_client.post(f"/api/projects/{pid}/videos", json={"urls": [f"{media_server}/talk.mp4"]}).json()[0]["id"]
+    vid = auth_client.post(f"/api/projects/{pid}/videos", json={"urls": [f"{media_server}/talk.mp4"]}).json()[
+        0
+    ]["id"]
     run_jobs()
     clips = auth_client.get(f"/api/videos/{vid}/clips").json()
     keep = clips[0]["id"]

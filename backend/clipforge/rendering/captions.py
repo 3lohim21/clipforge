@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 from clipforge.analysis.lexicon import FILLERS
 from clipforge.analysis.segmenter import normalize_token
-from clipforge.rendering.presets import CaptionPreset
+from clipforge.rendering.presets import TITLE_OVERLAY, WATERMARK_OVERLAY, CaptionPreset
 from clipforge.transcription.words import Word
 
 _NON_SPEECH = re.compile(r"^[\[(].*[\])]$")  # [Music], (laughs), [Applause]
@@ -171,10 +171,12 @@ def build_ass(
         f"Style: Cap,{preset.font_family},{size},{primary},{secondary},{outline_col},{back_col},"
         f"0,0,0,0,100,100,{preset.letter_spacing * scale:.1f},0,{border_style},"
         f"{preset.outline_width * scale:.1f},{preset.shadow * scale:.1f},5,{margin},{margin},0,1",
-        f"Style: Title,Poppins Black,{round(58 * scale)},&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,"
-        f"0,0,0,0,100,100,0,0,1,{5 * scale:.1f},0,8,{margin},{margin},{round(height * 0.09)},1",
-        f"Style: Mark,Poppins ExtraBold,{round(36 * scale)},&H40FFFFFF,&H40FFFFFF,&H80000000,&H00000000,"
-        f"0,0,0,0,100,100,0,0,1,{2 * scale:.1f},0,8,{margin},{margin},{round(height * 0.035)},1",
+        f"Style: Title,{TITLE_OVERLAY['font_family']},{round(TITLE_OVERLAY['size'] * scale)},&H00FFFFFF,"
+        f"&H00FFFFFF,&H00000000,&H64000000,0,0,0,0,100,100,0,0,1,{TITLE_OVERLAY['outline'] * scale:.1f},0,8,"
+        f"{margin},{margin},{round(height * 0.09)},1",
+        f"Style: Mark,{WATERMARK_OVERLAY['font_family']},{round(WATERMARK_OVERLAY['size'] * scale)},"
+        f"&H40FFFFFF,&H40FFFFFF,&H80000000,&H00000000,0,0,0,0,100,100,0,0,1,{2 * scale:.1f},0,8,"
+        f"{margin},{margin},{round(height * 0.035)},1",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",

@@ -1,0 +1,47 @@
+# Public entry point: automatic HTTPS (Let's Encrypt), compression, security headers, and
+# zero-copy media streaming.
+#
+# Media flow: the API checks the session + workspace, then answers with an
+# `X-Accel-Redirect: /_protected_media/<key>` header and no body. Caddy intercepts that
+# response and streams the file itself from the shared volume (sendfile, HTTP Range), so
+# Python never moves video bytes and the API stays tiny under heavy viewing load.
+
+{$DOMAIN:localhost} {
+	encode zstd gzip
+
+	request_body {
+		max_size 20GB
+	}
+
+	reverse_proxy {$API_UPSTREAM:api:8000} {
+		@accel header X-Accel-Redirect *
+		handle_response @accel {
+			copy_response_headers {
+				include Cache-Control Content-Disposition X-Content-Type-Options
+			}
+			root * {$MEDIA_ROOT:/data/media}
+			rewrite * {rp.header.X-Accel-Redirect}
+			uri strip_prefix /_protected_media
+			method * GET
+			file_server
+		}
+	}
+
+	# Never let the internal media path be requested directly.
+	@internal path /_protected_media/*
+	respond @internal 404
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

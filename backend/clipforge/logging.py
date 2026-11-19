@@ -8,7 +8,8 @@ import logging
 import sys
 from datetime import UTC, datetime
 
-_RESERVED = set(logging.makeLogRecord({}).__dict__) | {"message", "asctime"}
+# "color_message" is uvicorn's ANSI-coloured duplicate of msg: useless in log pipelines.
+_RESERVED = set(logging.makeLogRecord({}).__dict__) | {"message", "asctime", "color_message"}
 
 
 class JsonFormatter(logging.Formatter):
