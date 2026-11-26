@@ -24,7 +24,7 @@ revenue number.
 ## Quick start (production)
 
 ```bash
-cd clipforge/deploy
+git clone https://github.com/3lohim21/clipforge.git && cd clipforge/deploy
 cp .env.example .env      # set DOMAIN, POSTGRES_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD
 docker compose up -d --build
 ```

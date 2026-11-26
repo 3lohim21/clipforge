@@ -19,7 +19,7 @@ of derived files; each export is 5–20 MB. Budget storage for your retention wi
 
 ```bash
 # on the server (Ubuntu 24.04 / Debian 12+ with Docker Engine + compose plugin)
-git clone <your repo> && cd <repo>/clipforge/deploy
+git clone https://github.com/3lohim21/clipforge.git && cd clipforge/deploy   # private repo: GitHub asks for a token
 cp .env.example .env
 nano .env            # DOMAIN, POSTGRES_PASSWORD, ADMIN_EMAIL, ADMIN_PASSWORD (+ optional keys)
 docker compose up -d --build
@@ -71,7 +71,7 @@ Twitch/Kick VODs, direct MP4 links and uploads are not affected.
 
 ## 4. CI/CD
 
-`.github/workflows/clipforge.yml` (runs only when `clipforge/**` changes):
+`.github/workflows/ci.yml` (runs on every push and pull request):
 
 | Job | What it proves |
 |---|---|
