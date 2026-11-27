@@ -1,0 +1,68 @@
+# Run ClipForge on your own computer (Mac, Windows or Linux) with Docker Desktop.
+#
+#   docker compose -f docker-compose.local.yml up -d --build
+#   open http://localhost:8080      (sign in: admin@clipforge.local / clipforge-admin)
+#
+# Only this computer can open it (it listens on 127.0.0.1). No domain, HTTPS or .env file
+# needed. Your videos and clips are kept in Docker volumes between restarts.
+#
+# Optional, set before the first start:  ADMIN_EMAIL, ADMIN_PASSWORD, ANTHROPIC_API_KEY,
+# WHISPER_MODEL (tiny|base|small|medium) — e.g. `ADMIN_PASSWORD=my-secret docker compose ...`
+
+name: clipforge-local
+
+x-app: &app
+  build:
+    context: ..
+    dockerfile: Dockerfile
+    target: runtime
+  image: clipforge:latest
+  environment:
+    DATABASE_URL: postgresql://clipforge:clipforge@postgres:5432/clipforge
+    PUBLIC_URL: http://localhost:8080
+    COOKIE_SECURE: "false" # plain http on localhost
+    MEDIA_ACCEL_REDIRECT: "false" # no Caddy locally: the API streams media itself
+    ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@clipforge.local}
+    ADMIN_PASSWORD: ${ADMIN_PASSWORD:-clipforge-admin}
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    WHISPER_MODEL: ${WHISPER_MODEL:-small}
+    LOG_JSON: "false"
+  volumes:
+    - media:/data
+  depends_on:
+    postgres:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: clipforge
+      POSTGRES_PASSWORD: clipforge
+      POSTGRES_DB: clipforge
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clipforge -d clipforge"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+    restart: unless-stopped
+
+  api:
+    <<: *app
+    command: ["serve", "--workers", "1"]
+    ports:
+      - "127.0.0.1:8080:8000"
+
+  worker:
+    <<: *app
+    command: ["worker"]
+    stop_grace_period: 60s
+    healthcheck:
+      disable: true # the image healthcheck targets the API
+
+volumes:
+  pgdata:
+  media:

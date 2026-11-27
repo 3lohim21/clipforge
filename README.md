@@ -21,7 +21,30 @@ revenue number.
 | **Exports** | 1080×1920 H.264/AAC MP4, loudness-normalised to −14 LUFS, faststart; ~7 s for a 35 s clip on 4 vCPU (NVENC on GPU). |
 | **Agency ops** | Clients/campaigns as projects, per-client brand kits and clip rules, team roles, clip library with copy-ready captions, posted-clip view tracking and CPM revenue estimates. |
 
-## Quick start (production)
+## Run it on your Mac (or any computer)
+
+No server, domain or settings file needed.
+
+1. Install **Docker Desktop** from https://www.docker.com/products/docker-desktop/ (pick
+   "Apple chip" or "Intel chip" to match your Mac) and open it once.
+2. Download this repo: on GitHub click **Code → Download ZIP**, then double-click the ZIP.
+3. Open the **Terminal** app and run:
+   ```bash
+   cd ~/Downloads/clipforge-main/deploy
+   docker compose -f docker-compose.local.yml up -d --build
+   ```
+   The first start builds everything (5–10 minutes); later starts take seconds.
+4. Open **http://localhost:8080** and sign in with `admin@clipforge.local` / `clipforge-admin`.
+
+Good to know:
+- Your first video takes a few extra minutes while the speech-to-text model downloads (once).
+- Keep the Mac awake while videos import and clips export. For faster processing, give Docker
+  more CPUs and memory in Docker Desktop → Settings → Resources.
+- Stop it with `docker compose -f docker-compose.local.yml down` — videos and clips are kept.
+  Start it again with the same `up -d` command (no `--build` needed unless you update the code).
+- Only this computer can open it. To give your team access, deploy to a server (below).
+
+## Quick start (production server)
 
 ```bash
 git clone https://github.com/3lohim21/clipforge.git && cd clipforge/deploy
